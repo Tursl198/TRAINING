@@ -56,7 +56,7 @@ is.numeric(PUMS23_NYCITY$ADJINC)
 
 ## If i want to adjust all nominal values for household income to 2023 inflation asjustment factor, I need to select the value for ADJINC that corresponds to 2023, which is 1019518 and divide it by 1000000 and then multiply by the nominal wage variable HINCP
 
-PUMS23_NYCITY <-  PUMS23_NYCITY %>% mutate(ADJ_HINCP = HINCP*(1019518/1000000))  
+PUMS23_NYCITY <-  PUMS23_NYCITY %>% mutate(ADJ_HINCP = HINCP*(ADJINC/1000000))  
 
 ### now i can calculate the descriptive statistics for this variable after having created the survey design object with weight WGTP
 ##WGPT is the weight to be used at the household level. 
@@ -66,14 +66,22 @@ svy_design <- PUMS23_NYCITY %>%  as_survey_design(weights = WGTP)
 
 #to caluclate the mean
 
-svymean(~ADJ_HINCP, design = svy_design, na.rm = TRUE, ci = TRUE)
+mean_result <-svymean(~ADJ_HINCP, design = svy_design, na.rm = TRUE, ci = TRUE)
 
 ##MEAN WITHOUT SURVEY WEIGHT TO CHECK THE DIFFERENCE
 mean(PUMS23_NYCITY$ADJ_HINCP, na.rm = TRUE)
 
 
 #TO CALCULATE THE MEDIAN
-svyquantile(~ADJ_HINCP, design = svy_design, quantiles = 0.5, na.rm = TRUE, ci = TRUE)
+median_result <- svyquantile(~ADJ_HINCP, design = svy_design, quantiles = 0.5, na.rm = TRUE, ci = TRUE)
+
+
+#I store the results 
+
+mean_median_df <- data.frame(
+  Statistic = c("Mean", "Median"),
+  Value = c(coef(mean_result), coef(median_result))
+)
 
 
 ### to calculate percentiles 
@@ -85,23 +93,79 @@ quantile_values <- coef(quantile_values)
 
 NYC_wage_quintiles <- tibble (percentile = percentiles, qADJ_HINCP = quantile_values)
 
-### to obtain values as in the tables dispalyed by the CPS: 
 
-svymean(~I(ADJ_HINCP < 10000), svy_design, na.rm = TRUE) * 100
-svymean(~I(ADJ_HINCP >= 10000 & ADJ_HINCP <15000), svy_design, na.rm = TRUE) * 100
-svymean(~I(ADJ_HINCP >= 15000 & ADJ_HINCP <25000), svy_design, na.rm = TRUE) * 100
-svymean(~I(ADJ_HINCP >= 25000 & ADJ_HINCP <35000), svy_design, na.rm = TRUE) * 100
-svymean(~I(ADJ_HINCP >= 35000 & ADJ_HINCP <50000), svy_design, na.rm = TRUE) * 100
-svymean(~I(ADJ_HINCP >= 50000 & ADJ_HINCP <75000), svy_design, na.rm = TRUE) * 100
-svymean(~I(ADJ_HINCP >= 75000 & ADJ_HINCP <100000), svy_design, na.rm = TRUE) * 100
-svymean(~I(ADJ_HINCP >= 100000 & ADJ_HINCP <150000), svy_design, na.rm = TRUE) * 100
-svymean(~I(ADJ_HINCP >= 100000 & ADJ_HINCP <150000), svy_design, na.rm = TRUE) * 100
-svymean(~I(ADJ_HINCP >= 150000 & ADJ_HINCP <200000), svy_design, na.rm = TRUE) * 100
-svymean(~I(ADJ_HINCP >= 150000 & ADJ_HINCP <200000), svy_design, na.rm = TRUE) * 100
-svymean(~I(ADJ_HINCP >= 200000), svy_design, na.rm = TRUE) * 100
+# Calculate income brackets and store only the TRUE percentages
+income_brackets <- data.frame(
+  Income_Bracket = c(
+    "Less than $10,000",
+    "$10,000 to $14,999",
+    "$15,000 to $24,999",
+    "$25,000 to $34,999",
+    "$35,000 to $49,999",
+    "$50,000 to $74,999",
+    "$75,000 to $99,999",
+    "$100,000 to $149,999",
+    "$150,000 to $199,999",
+    "$200,000 or more"
+  ),
+  Percentage = c(
+    coef(svymean(~I(ADJ_HINCP < 10000), svy_design, na.rm = TRUE))[2] * 100,  # Extract TRUE value
+    coef(svymean(~I(ADJ_HINCP >= 10000 & ADJ_HINCP < 15000), svy_design, na.rm = TRUE))[2] * 100,
+    coef(svymean(~I(ADJ_HINCP >= 15000 & ADJ_HINCP < 25000), svy_design, na.rm = TRUE))[2] * 100,
+    coef(svymean(~I(ADJ_HINCP >= 25000 & ADJ_HINCP < 35000), svy_design, na.rm = TRUE))[2] * 100,
+    coef(svymean(~I(ADJ_HINCP >= 35000 & ADJ_HINCP < 50000), svy_design, na.rm = TRUE))[2] * 100,
+    coef(svymean(~I(ADJ_HINCP >= 50000 & ADJ_HINCP < 75000), svy_design, na.rm = TRUE))[2] * 100,
+    coef(svymean(~I(ADJ_HINCP >= 75000 & ADJ_HINCP < 100000), svy_design, na.rm = TRUE))[2] * 100,
+    coef(svymean(~I(ADJ_HINCP >= 100000 & ADJ_HINCP < 150000), svy_design, na.rm = TRUE))[2] * 100,
+    coef(svymean(~I(ADJ_HINCP >= 150000 & ADJ_HINCP < 200000), svy_design, na.rm = TRUE))[2] * 100,
+    coef(svymean(~I(ADJ_HINCP >= 200000), svy_design, na.rm = TRUE))[2] * 100
+  )
+)
+
+# Round the percentages to 2 decimal places for better readability
+income_brackets$Percentage <- round(income_brackets$Percentage, 2)
 
 
 
 
+## Calculating quantiles, deciles and Palma index.
 
 
+income_quintiles <- svy_design %>%
+  mutate(quintile = ntile(ADJ_HINCP, 5)) %>%  # Divide into 5 quintiles
+  group_by(quintile) %>%
+  summarize(total_income = survey_total(ADJ_HINCP, na.rm = TRUE)) %>%
+  mutate(share = total_income / sum(total_income))
+
+
+
+income_deciles <- svy_design %>%
+  mutate(decile = ntile(ADJ_HINCP, 10)) %>%  # Create deciles
+  group_by(decile) %>%
+  summarize(total_income = survey_total(ADJ_HINCP, na.rm = TRUE))
+
+top_10_income <- income_deciles %>%
+  filter(decile == 10) %>%
+  pull(total_income)
+
+bottom_40_income <- income_deciles %>%
+  filter(decile %in% c(1, 2, 3, 4)) %>%
+  summarise(total_income = sum(total_income)) %>%
+  pull(total_income)
+
+palma_index <- top_10_income / bottom_40_income
+print(palma_index)
+
+
+
+#Store the results in Excel
+
+
+write_xlsx(list(
+  "Mean & Median" = mean_median_df,
+  "Percentiles" = NYC_wage_quintiles,
+  "Income Distribution" = income_brackets,
+  "Income Quintiles" = income_quintiles,  
+  "Income Deciles" = income_deciles,
+  "Palma Index" = data.frame(Palma_Index = palma_index)  # Store Palma Index in a dataframe
+), path = "~/Desktop/CNYCA/ACS2023_5years_pums/Data/NYC_2019_2023_household_income_analysis.xlsx")
