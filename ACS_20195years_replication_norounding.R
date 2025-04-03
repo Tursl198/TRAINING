@@ -22,6 +22,11 @@ PUMS19_5years_NYS <- read.csv("psam_h36.csv")
 "PUMA" %in% names(PUMS19_5years_NYS)
 
 PUMS19_5years_NYC <- PUMS19_5years_NYS %>% filter(PUMA >= 3701 & PUMA <= 4114) 
+##NYC_PUMA_VALUES <- c(04103, 04104, 04107, 04108, 04109, 04110, 04111, 04112, 04121, 04165, 04204, 04205, 04207, 04208, 04209, 04210, 04211, 04212, 04221, 04263, 04301, 04302, 04303, 04304, 04305, 04306, 04307, 04308, 04309, 04310, 04311, 04312, 04313, 04314, 04315, 04316, 04317, 04318, 04401, 04402, 04403, 04404, 04405, 04406, 04407, 04408, 04409, 04410, 04411, 04412, 04413, 04414, 04501, 04502, 04503)
+
+
+###PUMS19_5years_NYC <- PUMS19_5years_NYS %>% filter(PUMA %in% NYC_PUMA_VALUES)
+
 
 summary(PUMS19_5years_NYC$HINCP, na.rm = TRUE)
 table(PUMS19_5years_NYC$ADJINC)
@@ -91,13 +96,46 @@ income_brackets <- data.frame(
 # Round the percentages to 2 decimal places for better readability
 income_brackets$Percentage <- round(income_brackets$Percentage, 2)
 
+## Calculating quantiles, deciles and Palma index.
+
+
+income_quintiles <- svy_design %>%
+  mutate(quintile = ntile(ADJ_HINCP, 5)) %>%  # Divide into 5 quintiles
+  group_by(quintile) %>%
+  summarize(total_income = survey_total(ADJ_HINCP, na.rm = TRUE)) %>%
+  mutate(share = total_income / sum(total_income))
+
+
+
+income_deciles <- svy_design %>%
+  mutate(decile = ntile(ADJ_HINCP, 10)) %>%  # Create deciles
+  group_by(decile) %>%
+  summarize(total_income = survey_total(ADJ_HINCP, na.rm = TRUE))
+
+top_10_income <- income_deciles %>%
+  filter(decile == 10) %>%
+  pull(total_income)
+
+bottom_40_income <- income_deciles %>%
+  filter(decile %in% c(1, 2, 3, 4)) %>%
+  summarise(total_income = sum(total_income)) %>%
+  pull(total_income)
+
+palma_index <- top_10_income / bottom_40_income
+print(palma_index)
+
+
 
 #Store the results in Excel
+
 
 write_xlsx(list(
   "Mean & Median" = mean_median_df,
   "Percentiles" = NYC_wage_quintiles2019,
-  "Income Distribution" = income_brackets
-), path = "~/Desktop/CNYCA/ACS2023_5years_pums/Data/NYC_Household_Income_2019_5yearsACS.xlsx")
+  "Income Distribution" = income_brackets,
+  "Income Quintiles" = income_quintiles,  
+  "Income Deciles" = income_deciles,
+  "Palma Index" = data.frame(Palma_Index = palma_index)  # Store Palma Index in a dataframe
+), path = "~/Desktop/CNYCA/ACS2023_5years_pums/Data/NYC_2015_2019_household_income_analysis.xlsx")
 
 
