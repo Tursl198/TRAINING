@@ -57,7 +57,7 @@ mean_median_df <- data.frame(
 
 ### to calculate percentiles 
 
-percentiles <- seq(0.01, 1.00, by = 0.01)
+percentiles <- seq(0.01, 0.99, by = 0.01)
 
 quantile_values <- svyquantile(~ADJ_HINCP, design = svy_design, quantiles = percentiles, na.rm = TRUE)
 quantile_values <- coef(quantile_values)
